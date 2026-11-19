@@ -31,14 +31,14 @@ Captured by running `PYTHONPATH=src .venv/bin/python main.py --benchmark --json`
 
 | Scenario | Raw Char Acc | Restored Char Acc | Raw Word Acc | Restored Word Acc | Tamper Detection | Claim Verdicts | Faithfulness | Latency |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `clean` | 100.0% | 100.0% | 100.0% | 100.0% | `CLEAN (0.00)` | 5 / 5 | 100.0% | 503 ms |
-| `skewed_blurry` | 0.0% | 79.9% | 0.0% | 80.7% | `CLEAN (0.00)` | 4 / 5 | 100.0% | 1,187 ms |
-| `tampered_hallucinated` | 100.0% | 100.0% | 100.0% | 100.0% | **`FLAG (1.00)`** | 5 / 5 | 20.0% | 514 ms |
+| `clean` | 100.0% | 100.0% | 100.0% | 100.0% | `CLEAN (0.00)` | 5 / 5 | 100.0% | 519 ms |
+| `skewed_blurry` | 0.0% | 100.0% | 0.0% | 100.0% | `CLEAN (0.00)` | 5 / 5 | 100.0% | 1,201 ms |
+| `tampered_hallucinated` | 100.0% | 100.0% | 100.0% | 100.0% | **`FLAG (1.00)`** | 5 / 5 | 20.0% | 526 ms |
 
-**Aggregate Benchmark Summary** (`2,400.8 ms` total runtime):
-- **Mean Raw vs. Restored Character Accuracy**: `66.7% -> 93.3%`
-- **Mean Raw vs. Restored Word Accuracy**: `66.7% -> 93.6%`
-- **Claim Verdict Classification Accuracy**: `93.3%` (`14 / 15` expected or produced claims)
+**Aggregate Benchmark Summary** (`2,445.1 ms` total runtime):
+- **Mean Raw vs. Restored Character Accuracy**: `66.7% -> 100.0%`
+- **Mean Raw vs. Restored Word Accuracy**: `66.7% -> 100.0%`
+- **Claim Verdict Classification Accuracy**: `100.0%` (`15 / 15` expected or produced claims)
 - **Tamper Detection Accuracy**: `100.0%` (zero false positives on uniform degraded scans)
 
 ---
@@ -68,6 +68,9 @@ Captured by running `PYTHONPATH=src .venv/bin/python main.py --benchmark --json`
 ```bash
 # Run the full forensic + OCR + verification benchmark
 PYTHONPATH=src python main.py --benchmark
+
+# Gate a CI job on the benchmark's claim-verdict accuracy (exits non-zero below the bar)
+PYTHONPATH=src python main.py --benchmark --min-claim-accuracy 0.95
 
 # Run built-in scenarios and export a standalone HTML forensic audit report
 PYTHONPATH=src python main.py --demo tampered_hallucinated --export-html audit-report.html
