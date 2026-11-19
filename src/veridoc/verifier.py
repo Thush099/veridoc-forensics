@@ -258,9 +258,24 @@ class HybridEvidenceRetriever:
     """Okapi BM25 + word/char TF-IDF cosine hybrid retriever over corpus passages."""
 
     def __init__(self, passages: Sequence[CorpusPassage], k1: float = 1.5, b: float = 0.75) -> None:
+        if (
+            isinstance(k1, bool)
+            or not isinstance(k1, (int, float))
+            or not math.isfinite(k1)
+            or k1 <= 0
+        ):
+            raise ValueError("BM25 k1 must be a finite number greater than 0")
+        if (
+            isinstance(b, bool)
+            or not isinstance(b, (int, float))
+            or not math.isfinite(b)
+            or not 0 <= b <= 1
+        ):
+            raise ValueError("BM25 b must be a finite number between 0 and 1")
+
         self.passages = list(passages)
-        self.k1 = k1
-        self.b = b
+        self.k1 = float(k1)
+        self.b = float(b)
         self._doc_tokens: list[list[str]] = []
         self._doc_freqs: dict[str, int] = {}
         self._doc_lens: list[int] = []
@@ -291,7 +306,9 @@ class HybridEvidenceRetriever:
 
     def retrieve(self, query: str, top_k: int = 3) -> list[EvidenceMatch]:
         """Rank passages for ``query`` using normalized BM25 + word/char TF-IDF fusion."""
-        if not self.passages or not query.strip():
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0:
+            raise ValueError("top_k must be a non-negative integer")
+        if not self.passages or not query.strip() or top_k == 0:
             return []
 
         n_docs = len(self.passages)
@@ -511,6 +528,8 @@ class ClaimVerifier:
         corpus: Union[str, Path, Sequence[dict[str, str] | CorpusPassage]],
         top_k: int = 3,
     ) -> None:
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0:
+            raise ValueError("top_k must be a non-negative integer")
         self.passages = parse_corpus_jsonl(corpus)
         self.top_k = top_k
         self.retriever = HybridEvidenceRetriever(self.passages)
