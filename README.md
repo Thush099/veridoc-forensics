@@ -75,6 +75,9 @@ PYTHONPATH=src python main.py --benchmark --min-claim-accuracy 0.95
 # Run built-in scenarios and export a standalone HTML forensic audit report
 PYTHONPATH=src python main.py --demo tampered_hallucinated --export-html audit-report.html
 
+# Export the same report with the light theme (default is dark)
+PYTHONPATH=src python main.py --demo tampered_hallucinated --export-html audit-report.html --theme light
+
 # Verify a local document image against a custom JSONL knowledge base
 PYTHONPATH=src python main.py --verify-image scan.png --corpus reference_kb.jsonl --json
 
