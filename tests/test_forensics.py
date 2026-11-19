@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import struct
+import zlib
 
 import cv2
 import numpy as np
@@ -85,6 +87,20 @@ def test_custom_numpy_and_pil_inputs_plus_svg_helper() -> None:
     svg = build_before_after_svg(restored_from_np, restored_from_pil, rep_np)
     assert svg.startswith("<svg") and "Forensic-Restored Output" in svg
     assert encode_image_base64(b"abc").startswith("data:image/png;base64,")
+
+
+def test_forensic_analyzer_rejects_oversized_image_before_decode() -> None:
+    image = Image.new("RGB", (1, 1), color=(255, 255, 255))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    png = bytearray(buf.getvalue())
+
+    # Keep a valid PNG header but declare dimensions above the analyzer limit.
+    struct.pack_into(">II", png, 16, 5_000, 5_000)
+    png[29:33] = struct.pack(">I", zlib.crc32(png[12:29]) & 0xFFFFFFFF)
+
+    with pytest.raises(ValueError, match="pixel limit"):
+        DocumentForensicAnalyzer().analyze_and_restore(bytes(png), include_previews=False)
 
 
 def test_forensic_analyzer_rejects_invalid_inputs() -> None:

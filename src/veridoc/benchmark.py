@@ -30,6 +30,12 @@ def _levenshtein(seq_a: list[str] | str, seq_b: list[str] | str) -> int:
     return prev[-1]
 
 
+def _score_verdicts(expected: list[str], actual: list[str]) -> tuple[int, int]:
+    """Count matched verdicts and all expected or produced claims."""
+    matched = sum(1 for exp, act in zip(expected, actual) if exp == act)
+    return matched, max(len(expected), len(actual))
+
+
 def compute_char_accuracy(hypothesis: str, reference: str) -> float:
     """Compute character accuracy ``max(0.0, 1.0 - CER)`` over whitespace-normalized text."""
     hyp = re.sub(r"\s+", " ", hypothesis).strip()
@@ -135,14 +141,11 @@ def run_benchmark(
 
         expected_verdicts = [v for _, v in scenario.expected_claims]
         actual_verdicts = [c.verdict for c in audit.verification.claims]
-        matched = sum(
-            1 for exp, act in zip(expected_verdicts, actual_verdicts) if exp == act
-        )
-        total_expected = len(expected_verdicts)
-        claim_acc = matched / max(total_expected, 1)
+        matched, total_claims = _score_verdicts(expected_verdicts, actual_verdicts)
+        claim_acc = matched / max(total_claims, 1)
 
         total_claims_correct += matched
-        total_claims_count += total_expected
+        total_claims_count += total_claims
 
         tamper_detected = bool(audit.forensics and audit.forensics.tamper_flagged)
         if tamper_detected == scenario.expected_tamper:
@@ -162,7 +165,7 @@ def run_benchmark(
                 tamper_score=round(audit.forensics.tamper_suspicion_score if audit.forensics else 0.0, 3),
                 claim_accuracy=round(claim_acc, 4),
                 claims_matched=matched,
-                claims_total=total_expected,
+                claims_total=total_claims,
                 faithfulness_score=audit.verification.faithfulness_score,
                 latency_ms=round(elapsed_ms, 1),
             )

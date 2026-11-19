@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import re
 from typing import Any, Literal
@@ -17,11 +18,39 @@ from veridoc.ocr import check_tesseract_available
 from veridoc.pipeline import VeriDocPipeline, render_audit_html
 from veridoc.synthetic import get_reference_corpus_jsonl
 
+MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024
+
 
 class AnalyzeDemoRequest(BaseModel):
     """Request payload for running a built-in synthetic demo scenario."""
 
     scenario: str = "clean"
+
+
+async def _read_limited_body(request: Request) -> bytes:
+    """Read a request body without buffering more than the configured limit."""
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            if int(content_length) > MAX_REQUEST_BODY_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Request body exceeds the {MAX_REQUEST_BODY_BYTES}-byte limit.",
+                )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header.") from None
+
+    chunks: list[bytes] = []
+    body_size = 0
+    async for chunk in request.stream():
+        body_size += len(chunk)
+        if body_size > MAX_REQUEST_BODY_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Request body exceeds the {MAX_REQUEST_BODY_BYTES}-byte limit.",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _parse_multipart_form(body: bytes, content_type: str) -> tuple[dict[str, str], dict[str, bytes]]:
@@ -629,7 +658,7 @@ def create_app(pipeline: VeriDocPipeline | None = None) -> FastAPI:
     async def analyze_demo(request: Request, scenario: str | None = None) -> AuditResult:
         selected = scenario
         if selected is None:
-            raw_body = await request.body()
+            raw_body = await _read_limited_body(request)
             if raw_body.strip():
                 try:
                     payload = AnalyzeDemoRequest.model_validate_json(raw_body)
@@ -647,7 +676,7 @@ def create_app(pipeline: VeriDocPipeline | None = None) -> FastAPI:
     @application.post("/api/verify", response_model=AuditResult)
     async def verify_document(request: Request) -> AuditResult:
         content_type = request.headers.get("content-type", "")
-        body = await request.body()
+        body = await _read_limited_body(request)
 
         file_bytes: bytes | None = None
         claim_text: str | None = None
@@ -678,9 +707,12 @@ def create_app(pipeline: VeriDocPipeline | None = None) -> FastAPI:
             if isinstance(img_b64, str) and img_b64.strip():
                 raw_b64 = img_b64.split(",", 1)[1] if "," in img_b64 else img_b64
                 try:
-                    file_bytes = base64.b64decode(raw_b64)
-                except Exception as exc:
-                    raise HTTPException(status_code=400, detail=f"Invalid image_base64: {exc}") from exc
+                    file_bytes = base64.b64decode(raw_b64, validate=True)
+                except (binascii.Error, ValueError) as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid image_base64: expected valid base64 data.",
+                    ) from exc
             claim_text = data.get("claim_text")
             corpus_jsonl = data.get("corpus_jsonl")
 
@@ -715,7 +747,7 @@ def create_app(pipeline: VeriDocPipeline | None = None) -> FastAPI:
 
     @application.post("/api/export-html")
     async def export_html(request: Request, theme: Literal["dark", "light"] = "dark") -> Response:
-        raw_body = await request.body()
+        raw_body = await _read_limited_body(request)
         if not raw_body.strip():
             raise HTTPException(status_code=400, detail="Request body must contain an AuditResult JSON payload.")
         try:

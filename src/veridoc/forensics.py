@@ -15,6 +15,11 @@ from PIL import Image
 from veridoc.models import ForensicIssue, ForensicReport, SuspiciousRegion
 
 ImageInput = Union[bytes, str, Path, np.ndarray, Image.Image]
+MAX_IMAGE_PIXELS = 20_000_000
+
+
+class _ImageTooLargeError(ValueError):
+    pass
 
 
 def encode_image_base64(image_bytes: bytes, mime: str = "image/png") -> str:
@@ -240,6 +245,7 @@ class DocumentForensicAnalyzer:
             return self._decode_bytes(image_input)
 
         if isinstance(image_input, Image.Image):
+            self._validate_image_size(*image_input.size)
             dpi_info = image_input.info.get("dpi")
             if isinstance(dpi_info, (tuple, list)) and dpi_info and dpi_info[0]:
                 meta_dpi = float(dpi_info[0])
@@ -249,6 +255,8 @@ class DocumentForensicAnalyzer:
             return bgr, self._encode_png(bgr), meta_dpi
 
         if isinstance(image_input, np.ndarray):
+            if image_input.ndim >= 2:
+                self._validate_image_size(image_input.shape[1], image_input.shape[0])
             arr = image_input.copy()
             if arr.ndim == 2:
                 bgr = cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR)
@@ -260,22 +268,37 @@ class DocumentForensicAnalyzer:
 
         raise TypeError(f"Unsupported image input type: {type(image_input).__name__}")
 
+    @staticmethod
+    def _validate_image_size(width: int, height: int) -> None:
+        if width * height > MAX_IMAGE_PIXELS:
+            raise _ImageTooLargeError(
+                f"Image dimensions exceed the {MAX_IMAGE_PIXELS}-pixel limit."
+            )
+
     def _decode_bytes(self, raw_bytes: bytes) -> tuple[np.ndarray, bytes, float | None]:
         if not raw_bytes:
             raise ValueError("Empty image payload.")
         meta_dpi: float | None = None
         try:
             with Image.open(io.BytesIO(raw_bytes)) as pil_img:
+                self._validate_image_size(*pil_img.size)
                 dpi_info = pil_img.info.get("dpi")
                 if isinstance(dpi_info, (tuple, list)) and dpi_info and dpi_info[0]:
                     meta_dpi = float(dpi_info[0])
                 rgb = pil_img.convert("RGB")
                 bgr = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
+        except _ImageTooLargeError:
+            raise
+        except Image.DecompressionBombError as exc:
+            raise ValueError(
+                f"Image dimensions exceed the {MAX_IMAGE_PIXELS}-pixel limit."
+            ) from exc
         except Exception as exc:
             arr = np.frombuffer(raw_bytes, dtype=np.uint8)
             bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if bgr is None:
                 raise ValueError(f"Unable to decode image bytes: {exc}") from exc
+            self._validate_image_size(bgr.shape[1], bgr.shape[0])
 
         png_bytes = self._encode_png(bgr)
         return bgr, png_bytes, meta_dpi
