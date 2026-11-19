@@ -50,7 +50,8 @@ def test_restoration_dramatically_improves_degraded_ocr() -> None:
     suite = generate_demo_suite()
     extractor = TesseractExtractor()
     analyzer = DocumentForensicAnalyzer()
-    skewed_bytes = suite.scenarios["skewed_blurry"].image_bytes
+    scenario = suite.scenarios["skewed_blurry"]
+    skewed_bytes = scenario.image_bytes
 
     raw_ocr = extractor.extract(skewed_bytes)
     restored_bytes, _ = analyzer.analyze_and_restore(skewed_bytes, include_previews=False)
@@ -60,6 +61,7 @@ def test_restoration_dramatically_improves_degraded_ocr() -> None:
     assert restored_ocr.mean_confidence > raw_ocr.mean_confidence
     assert "$482,500" in restored_ocr.text
     assert "99.94%" in restored_ocr.text
+    assert "99.90%" in restored_ocr.text
 
 
 def test_split_claims_preserves_decimals_and_drops_header_chrome() -> None:
