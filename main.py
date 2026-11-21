@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -13,7 +14,7 @@ if str(SRC_DIR) not in sys.path:
 
 import uvicorn
 
-from veridoc.benchmark import format_benchmark_table, run_benchmark
+from veridoc.benchmark import BenchmarkSuiteResult, format_benchmark_table, run_benchmark
 from veridoc.models import AuditResult
 from veridoc.pipeline import VeriDocPipeline, render_audit_html
 from veridoc.synthetic import get_reference_corpus_jsonl
@@ -104,7 +105,33 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit machine-readable JSON output for --demo, --benchmark, or --verify-image.",
     )
+    parser.add_argument(
+        "--min-claim-accuracy",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when the benchmark's overall claim accuracy is below "
+            "this threshold in [0, 1], so the suite can gate a CI job."
+        ),
+    )
     return parser
+
+
+def exit_code_for(bench: "BenchmarkSuiteResult", min_claim_accuracy: float | None) -> int:
+    """Map a benchmark result to a process exit code under an accuracy gate.
+
+    Returns 0 when no threshold is given or the overall claim accuracy meets it,
+    and 1 when it falls below. The threshold must be a finite value in [0, 1];
+    anything else raises ``ValueError`` so a typo cannot silently disable gating.
+    """
+    if min_claim_accuracy is None:
+        return 0
+    if not math.isfinite(min_claim_accuracy) or not 0.0 <= min_claim_accuracy <= 1.0:
+        raise ValueError(
+            "min_claim_accuracy must be a finite value in [0, 1]; "
+            f"got {min_claim_accuracy!r}"
+        )
+    return 1 if bench.overall_claim_accuracy < min_claim_accuracy else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -121,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(bench.to_dict(), indent=2))
         else:
             print(format_benchmark_table(bench))
-        return 0
+        return exit_code_for(bench, args.min_claim_accuracy)
 
     pipeline = VeriDocPipeline()
 

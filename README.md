@@ -27,18 +27,18 @@ flowchart LR
 
 ## Measured Benchmark Results
 
-Captured directly by running `PYTHONPATH=src ../.venv/bin/python main.py --benchmark` across the three offline synthetic compliance document scenarios:
+Captured by running `PYTHONPATH=src .venv/bin/python main.py --benchmark --json` across the three offline synthetic compliance document scenarios. OCR metrics are an observed run with the local Tesseract installation and may vary by environment.
 
 | Scenario | Raw Char Acc | Restored Char Acc | Raw Word Acc | Restored Word Acc | Tamper Detection | Claim Verdicts | Faithfulness | Latency |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `clean` | 100.0% | 100.0% | 100.0% | 100.0% | `CLEAN (0.00)` | 5 / 5 | 100.0% | 1,655 ms |
-| `skewed_blurry` | 0.0% | **99.7%** | 0.0% | **97.6%** | `CLEAN (0.00)` | 5 / 5 | 100.0% | 4,271 ms |
-| `tampered_hallucinated` | 100.0% | 100.0% | 100.0% | 100.0% | **`FLAG (1.00)`** | 5 / 5 | 20.0% | 1,818 ms |
+| `clean` | 100.0% | 100.0% | 100.0% | 100.0% | `CLEAN (0.00)` | 5 / 5 | 100.0% | 519 ms |
+| `skewed_blurry` | 0.0% | 100.0% | 0.0% | 100.0% | `CLEAN (0.00)` | 5 / 5 | 100.0% | 1,201 ms |
+| `tampered_hallucinated` | 100.0% | 100.0% | 100.0% | 100.0% | **`FLAG (1.00)`** | 5 / 5 | 20.0% | 526 ms |
 
-**Aggregate Benchmark Summary** (`8,387.6 ms` total runtime):
-- **Mean Raw vs. Restored Character Accuracy**: `66.7% -> 99.9%`
-- **Mean Raw vs. Restored Word Accuracy**: `66.7% -> 99.2%`
-- **Claim Verdict Classification Accuracy**: `100.0%` (`SUPPORTED`, `CONTRADICTED`, `UNVERIFIED`)
+**Aggregate Benchmark Summary** (`2,445.1 ms` total runtime):
+- **Mean Raw vs. Restored Character Accuracy**: `66.7% -> 100.0%`
+- **Mean Raw vs. Restored Word Accuracy**: `66.7% -> 100.0%`
+- **Claim Verdict Classification Accuracy**: `100.0%` (`15 / 15` expected or produced claims)
 - **Tamper Detection Accuracy**: `100.0%` (zero false positives on uniform degraded scans)
 
 ---
@@ -69,8 +69,14 @@ Captured directly by running `PYTHONPATH=src ../.venv/bin/python main.py --bench
 # Run the full forensic + OCR + verification benchmark
 PYTHONPATH=src python main.py --benchmark
 
+# Gate a CI job on the benchmark's claim-verdict accuracy (exits non-zero below the bar)
+PYTHONPATH=src python main.py --benchmark --min-claim-accuracy 0.95
+
 # Run built-in scenarios and export a standalone HTML forensic audit report
 PYTHONPATH=src python main.py --demo tampered_hallucinated --export-html audit-report.html
+
+# Export the same report with the light theme (default is dark)
+PYTHONPATH=src python main.py --demo tampered_hallucinated --export-html audit-report.html --theme light
 
 # Verify a local document image against a custom JSONL knowledge base
 PYTHONPATH=src python main.py --verify-image scan.png --corpus reference_kb.jsonl --json
@@ -101,7 +107,7 @@ PYTHONPATH=src pytest -v
 | `GET /` | Serves the zero-build dark-mode **Interactive Document Forensics & Claim Verification Studio UI**. | — |
 | `GET /health` | Returns service health and local Tesseract binary availability/version. | — |
 | `POST /api/analyze-demo` | Runs the full pipeline on `"clean"`, `"skewed_blurry"`, or `"tampered_hallucinated"`. | `{"scenario": "tampered_hallucinated"}` |
-| `POST /api/verify` | Audits an uploaded PNG/JPG (`file`) or raw `claim_text` against an optional `corpus_jsonl`. | `multipart/form-data`, `application/x-www-form-urlencoded`, or JSON (`image_base64` / `claim_text`) |
+| `POST /api/verify` | Audits an uploaded PNG/JPG (`file`) or raw `claim_text` against an optional `corpus_jsonl`. Requests are limited to 10 MiB and images to 20 megapixels; malformed base64 image data returns HTTP 400. | `multipart/form-data`, `application/x-www-form-urlencoded`, or JSON (`image_base64` / `claim_text`) |
 | `POST /api/export-html` | Converts an `AuditResult` payload into a standalone printable dark or light HTML report (`?theme=dark\|light`). | `AuditResult` JSON |
 
 ---

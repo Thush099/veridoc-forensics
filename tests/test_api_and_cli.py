@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -109,6 +111,54 @@ def test_verify_multipart_upload_and_direct_claim_text() -> None:
     # 4. Invalid payload rejection.
     bad_res = client.post("/api/verify", json={"corpus_jsonl": corpus})
     assert bad_res.status_code == 400
+
+
+def test_verify_rejects_oversized_request(monkeypatch: object) -> None:
+    from veridoc import server
+
+    monkeypatch.setattr(server, "MAX_REQUEST_BODY_BYTES", 64, raising=False)  # type: ignore[attr-defined]
+    response = client.post("/api/verify", json={"claim_text": "x" * 128})
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Request body exceeds the 64-byte limit."
+
+
+def test_verify_rejects_oversized_stream_without_content_length(monkeypatch: object) -> None:
+    from veridoc import server
+
+    monkeypatch.setattr(server, "MAX_REQUEST_BODY_BYTES", 64)
+    response = client.post(
+        "/api/verify",
+        content=b" " * 65,
+        headers={"Content-Type": "application/json", "Transfer-Encoding": "chunked"},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Request body exceeds the 64-byte limit."
+
+
+def test_verify_rejects_malformed_base64_image() -> None:
+    response = client.post("/api/verify", json={"image_base64": "%%%not-base64%%%"})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid image_base64: expected valid base64 data."
+
+
+def test_verify_rejects_images_over_pixel_limit(monkeypatch: object) -> None:
+    from veridoc import forensics
+
+    monkeypatch.setattr(forensics, "MAX_IMAGE_PIXELS", 4)  # type: ignore[attr-defined]
+    image = Image.new("RGB", (3, 2), color=(255, 255, 255))
+    image_bytes = io.BytesIO()
+    image.save(image_bytes, format="PNG")
+
+    response = client.post(
+        "/api/verify",
+        files={"file": ("oversized.png", image_bytes.getvalue(), "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Image dimensions exceed the 4-pixel limit."
 
 
 def test_cli_demo_verify_image_and_benchmark(tmp_path: Path, capsys: object) -> None:

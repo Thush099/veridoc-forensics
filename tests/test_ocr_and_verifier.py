@@ -50,7 +50,8 @@ def test_restoration_dramatically_improves_degraded_ocr() -> None:
     suite = generate_demo_suite()
     extractor = TesseractExtractor()
     analyzer = DocumentForensicAnalyzer()
-    skewed_bytes = suite.scenarios["skewed_blurry"].image_bytes
+    scenario = suite.scenarios["skewed_blurry"]
+    skewed_bytes = scenario.image_bytes
 
     raw_ocr = extractor.extract(skewed_bytes)
     restored_bytes, _ = analyzer.analyze_and_restore(skewed_bytes, include_previews=False)
@@ -60,6 +61,7 @@ def test_restoration_dramatically_improves_degraded_ocr() -> None:
     assert restored_ocr.mean_confidence > raw_ocr.mean_confidence
     assert "$482,500" in restored_ocr.text
     assert "99.94%" in restored_ocr.text
+    assert "99.90%" in restored_ocr.text
 
 
 def test_split_claims_preserves_decimals_and_drops_header_chrome() -> None:
@@ -78,6 +80,33 @@ def test_split_claims_preserves_decimals_and_drops_header_chrome() -> None:
     assert "U.S. regions." in claims[0]
     assert "99.94%" in claims[1]
     assert "7 years." in claims[2]
+
+
+@pytest.mark.parametrize("k1", [float("nan"), float("inf"), -0.1, True, "invalid"])
+def test_retriever_rejects_invalid_bm25_k1(k1: object) -> None:
+    with pytest.raises(ValueError, match="k1"):
+        HybridEvidenceRetriever([], k1=k1)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("b", [float("nan"), float("inf"), -0.1, 1.1, True, "invalid"])
+def test_retriever_rejects_invalid_bm25_b(b: object) -> None:
+    with pytest.raises(ValueError, match="b"):
+        HybridEvidenceRetriever([], b=b)  # type: ignore[arg-type]
+
+
+def test_retriever_validates_top_k_and_preserves_zero_results() -> None:
+    passages = parse_corpus_jsonl(
+        json.dumps({"id": "C-1", "text": "Customer vault backups are encrypted."})
+    )
+    retriever = HybridEvidenceRetriever(passages)
+
+    assert retriever.retrieve("Customer vault backups", top_k=0) == []
+    for top_k in (-1, 1.5, True, "1"):
+        with pytest.raises(ValueError, match="top_k"):
+            retriever.retrieve("Customer vault backups", top_k=top_k)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="top_k"):
+        ClaimVerifier(passages, top_k=-1)
 
 
 def test_hybrid_verifier_discriminates_supported_partial_contradicted_unverified() -> None:

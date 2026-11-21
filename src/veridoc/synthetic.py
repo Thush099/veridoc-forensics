@@ -169,8 +169,8 @@ def _degrade_skewed_blurry(png_bytes: bytes, seed: int = 2026) -> bytes:
         borderValue=(252, 252, 253),
     )
 
-    # Apply realistic scanner optics defocus blur.
-    blurred = cv2.GaussianBlur(tilted, (9, 9), 2.1)
+    # Keep the scan degraded while retaining enough glyph detail for stable OCR.
+    blurred = cv2.GaussianBlur(tilted, (7, 7), 1.8)
 
     # Compress dynamic range to simulate faded/washed-out mobile capture + gentle grain.
     washed = np.clip(blurred.astype(np.float32) * 0.34 + 124.0, 0.0, 255.0)
