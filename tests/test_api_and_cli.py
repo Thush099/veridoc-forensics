@@ -189,3 +189,10 @@ def test_cli_demo_verify_image_and_benchmark(tmp_path: Path, capsys: object) -> 
     assert bench_data["mean_restored_char_acc"] > bench_data["mean_raw_char_acc"]
     assert bench_data["overall_claim_accuracy"] >= 0.95
     assert bench_data["tamper_detection_accuracy"] == 1.0
+
+
+def test_studio_ui_disables_heuristic_caching() -> None:
+    """The studio UI sends no cache validators, so browsers heuristically cached
+    stale HTML after edits (observed live in the stdlib-served fleet)."""
+    resp = client.get("/")
+    assert resp.headers.get("cache-control") == "no-cache"

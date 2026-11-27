@@ -1,5 +1,7 @@
 # VeriDoc Forensics
 
+[![CI](https://github.com/Thush099/veridoc-forensics/actions/workflows/tests.yml/badge.svg)](https://github.com/Thush099/veridoc-forensics/actions/workflows/tests.yml)
+
 **Multimodal Document OCR, Forensic Image Quality Auditor & Citation-Grounded Claim Verification Studio**
 
 VeriDoc Forensics is an end-to-end offline Python & FastAPI system that audits scanned compliance and financial documents across two orthogonal layers: **pixel-level image integrity** (blur sharpness, geometric skew rectification, dynamic range, Error Level Analysis, and local smooth-background noise anomalies) and **citation-grounded factual verification** (hybrid Okapi BM25 + word/char TF-IDF evidence retrieval with structured numeric, entity, and polarity entailment checking).
