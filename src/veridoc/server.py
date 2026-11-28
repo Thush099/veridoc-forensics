@@ -641,7 +641,10 @@ def create_app(pipeline: VeriDocPipeline | None = None) -> FastAPI:
 
     @application.get("/", response_class=HTMLResponse)
     async def studio_ui() -> HTMLResponse:
-        return HTMLResponse(content=_build_studio_html(get_reference_corpus_jsonl()))
+        return HTMLResponse(
+            content=_build_studio_html(get_reference_corpus_jsonl()),
+            headers={"Cache-Control": "no-cache"},
+        )
 
     @application.get("/health")
     async def health() -> dict[str, Any]:
@@ -770,7 +773,10 @@ def create_app(pipeline: VeriDocPipeline | None = None) -> FastAPI:
         rendered = render_audit_html(audit, theme=req_theme)
         return HTMLResponse(
             content=rendered,
-            headers={"Content-Disposition": 'attachment; filename="veridoc-audit-report.html"'},
+            headers={
+                "Content-Disposition": 'attachment; filename="veridoc-audit-report.html"',
+                "Cache-Control": "no-cache",
+            },
         )
 
     @application.exception_handler(ValueError)

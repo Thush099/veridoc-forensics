@@ -58,3 +58,7 @@ where = ["src"]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
 addopts = "-ra"
+# Third-party import-time deprecations only; anything from project code still surfaces.
+filterwarnings = [
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
